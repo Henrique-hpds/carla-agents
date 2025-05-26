@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import random
 import carla
+import time
 import os
 
 from agents.navigation.basic_agent import BasicAgent
@@ -12,10 +13,13 @@ from modules.IMU import IMU
 from datetime import datetime
 
 N_VEHICLES = 2
+SIM_TIME = 30#s
 
 timestamp = datetime.now().strftime('%Y-%m-%d_%Hh-%Mm-%Ss')
 experiment_dir = f'data/sincrono/exp_{timestamp}'
-os.makedirs(experiment_dir, exist_ok=True)
+
+if not os.path.exists(experiment_dir):
+    os.makedirs(experiment_dir)
 
 
 def imu_listener(imu_actor, data_storage):
@@ -94,6 +98,7 @@ try:
     spawn_points = world.get_map().get_spawn_points()
     
     vehicle = world.spawn_actor(vehicle_bp.find("vehicle.bmw.grandtourer"), spawn_points[0])
+    vehicle.set_autopilot(True, traffic_manager.get_port())
 
     if vehicle is not None:
         agentes.append(vehicle)
@@ -111,20 +116,36 @@ try:
     imu_sensor = world.spawn_actor(imu_bp, imu_transform, attach_to=vehicle)
     imu_listener(imu_sensor, imu_data)    
     
-    agent = BasicAgent(vehicle)
-    destination = spawn_points[-1].location
-    agent.set_destination(destination)
+    tempo = 0.0
+    times = []
+    xs = []
+    ys = []
     
-    while True:
+    
+    while tempo < SIM_TIME:
         world.tick()  # avança o mundo em modo síncrono
-        print(vehicle.get_transform().location)
-        control = agent.run_step()
-        vehicle.apply_control(control)
-        if agent.done():
-            print("Destino alcançado!")
-            break
-    plot_and_save_imu("vehicle", list(imu_data.values()), experiment_dir)
+        time.sleep(0.05)
+        transform = vehicle.get_transform()
+        location = transform.location
+        times.append(tempo)
+        xs.append(location.x)
+        ys.append(location.y)
+        print(tempo, location)
+        tempo += 0.05
+        
+    imu_sensor.stop()
 
+    plt.figure(figsize=(10, 5))
+    plt.plot(times, xs, label='Posição X')
+    plt.plot(times, ys, label='Posição Y')
+    plt.xlabel('Tempo (s)')
+    plt.ylabel('Posição (m)')
+    plt.title('Posição do veículo ao longo do tempo (modo síncrono)')
+    plt.legend()
+    plt.grid()
+    plt.savefig(f"{experiment_dir}/vehicle_position.png")
+    plot_and_save_imu("vehicle", list(imu_data.values()), experiment_dir)
+    
 finally:
     for agent in agentes:
         if agent.is_alive:

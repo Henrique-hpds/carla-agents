@@ -17,7 +17,9 @@ SIM_TIME = 30#s
 
 timestamp = datetime.now().strftime('%Y-%m-%d_%Hh-%Mm-%Ss')
 experiment_dir = f'data/assincrono/exp_{timestamp}'
-os.makedirs(experiment_dir)
+
+if not os.path.exists(experiment_dir):
+    os.makedirs(experiment_dir)
 
 
 def imu_listener(imu_actor, data_storage):
@@ -95,7 +97,7 @@ try:
     spawn_points = world.get_map().get_spawn_points()
     
     vehicle = world.spawn_actor(vehicle_bp.find("vehicle.bmw.grandtourer"), spawn_points[0])
-    vehicle.set_autopilot(True, traffic_manager.get_port())
+    # vehicle.set_autopilot(True, traffic_manager.get_port())
     
     if vehicle is not None:
         agentes.append(vehicle)
