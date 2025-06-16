@@ -23,7 +23,7 @@ class IMU:
     def callback(self, data):
         self.data[self.time] = {
             'gyro': data.gyroscope,
-            'accel': data.accelerometer,
+            'accel': data.accelerometer - carla.Vector3D(x=0,y=0,z=9.81),
             'compass': data.compass
         }
         self.time += self.tick_time

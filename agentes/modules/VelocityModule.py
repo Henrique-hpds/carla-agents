@@ -5,12 +5,11 @@ import os
 
 class VelocityModule:
     label: str
-    transform: carla.Transform
-    sensor: carla.Actor
+    attached_ob: carla.Actor
     data: dict
     time: float
     tick_time: float
-
+    
     def __init__(self, label, obj, thick_time):
         
         self.attached_ob = obj

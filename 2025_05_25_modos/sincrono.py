@@ -9,14 +9,17 @@ from agents.navigation.basic_agent import BasicAgent
 
 # custom modules
 from modules.IMU import IMU
+from modules.Camera import Camera
 
 from datetime import datetime
 
 N_VEHICLES = 2
 SIM_TIME = 30#s
+TICK_TIME = 0.05  # 20Hz
 
 timestamp = datetime.now().strftime('%Y-%m-%d_%Hh-%Mm-%Ss')
-experiment_dir = f'data/sincrono/exp_{timestamp}'
+# experiment_dir = f'data/sincrono/exp_{timestamp}'
+experiment_dir = f'data/sincrono/300s_20hz'
 
 if not os.path.exists(experiment_dir):
     os.makedirs(experiment_dir)
@@ -93,12 +96,17 @@ try:
     traffic_manager.set_global_distance_to_leading_vehicle(2.0)
     traffic_manager.set_hybrid_physics_mode(False)  # Para lidar com muitos veículos
 
+    # Deixa todos os semáforos verdes
+    for actor in world.get_actors().filter('traffic.traffic_light*'):
+        actor.set_state(carla.TrafficLightState.Green)
+        actor.set_green_time(9999)  # Mantém verde por muito tempo
+
     blueprint_library = world.get_blueprint_library()
     vehicle_bp = blueprint_library.filter('vehicle.*')
     spawn_points = world.get_map().get_spawn_points()
     
     vehicle = world.spawn_actor(vehicle_bp.find("vehicle.bmw.grandtourer"), spawn_points[0])
-    vehicle.set_autopilot(True, traffic_manager.get_port())
+    # vehicle.set_autopilot(True, traffic_manager.get_port())
 
     if vehicle is not None:
         agentes.append(vehicle)
@@ -111,10 +119,19 @@ try:
             agentes.append(vehicle_npc)
             vehicle_npc.set_autopilot(True, traffic_manager.get_port())
 
+    camera = Camera("vehicle", world, 0, 0, 2, 0, vehicle)
+
+    agent = BasicAgent(vehicle)
+    destination = spawn_points[-1].location
+    agent.set_destination(destination)
+
     imu_bp = blueprint_library.find('sensor.other.imu')
+    imu_bp.set_attribute('sensor_tick', str(TICK_TIME))
     imu_transform = carla.Transform(carla.Location(x=0.0, z=0.0))
     imu_sensor = world.spawn_actor(imu_bp, imu_transform, attach_to=vehicle)
     imu_listener(imu_sensor, imu_data)    
+
+    camera.start(experiment_dir)
     
     tempo = 0.0
     times = []
@@ -122,17 +139,26 @@ try:
     ys = []
     
     
-    while tempo < SIM_TIME:
-        world.tick()  # avança o mundo em modo síncrono
-        time.sleep(0.05)
+    # while tempo < SIM_TIME:
+    while True:
+        world.tick()
+        
         transform = vehicle.get_transform()
         location = transform.location
         times.append(tempo)
         xs.append(location.x)
         ys.append(location.y)
         print(tempo, location)
-        tempo += 0.05
         
+        if agent.done():
+            print("Agent reached the destination.")
+            break
+        
+        vehicle.apply_control(agent.run_step())
+        tempo += TICK_TIME
+        time.sleep(TICK_TIME)
+        
+    camera.stop()
     imu_sensor.stop()
 
     plt.figure(figsize=(10, 5))
@@ -145,6 +171,30 @@ try:
     plt.grid()
     plt.savefig(f"{experiment_dir}/vehicle_position.png")
     plot_and_save_imu("vehicle", list(imu_data.values()), experiment_dir)
+    
+    fig, axs = plt.subplots(2, 1, figsize=(15, 15))
+
+    # Use 'times' ao invés de 'time'
+    axs[0].plot(times, xs, label='Position X', color='blue')
+    axs[0].plot(times, ys, label='Position Y', color='orange')
+    axs[0].set_ylabel('Position Coordinates (m)')
+    axs[0].set_xlabel('Tempo (s)')
+    axs[0].legend()
+    axs[0].grid()
+
+    # Gráfico de trajetória GPS com gradiente de cores
+    sc = axs[1].scatter(xs, ys, c=times, cmap='viridis', s=10, label='Trajectory')
+    axs[1].scatter(xs[0], ys[0], label='Start', color='green', s=100)
+    axs[1].scatter(xs[-1], ys[-1], label='End', color='orange', s=100)
+    axs[1].set_xlabel('Position X (m)')
+    axs[1].set_ylabel('Position Y (m)')
+    axs[1].legend()
+    axs[1].grid()
+    fig.colorbar(sc, ax=axs[1], label='Time (s)')
+
+    fig.suptitle('Position Data over Time and Trajectory')
+    plt.tight_layout()
+    plt.savefig(f'{experiment_dir}/Position.png')
     
 finally:
     for agent in agentes:

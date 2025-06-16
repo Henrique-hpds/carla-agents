@@ -30,7 +30,7 @@ class PositionModule:
                 'y': current_data.y,
                 'z': current_data.z
             }
-            print(f"Position data at time {self.time}: x {current_data.x}, y {current_data.y}, z {current_data.z}") 
+            # print(f"Position data at time {self.time}: x {current_data.x}, y {current_data.y}, z {current_data.z}") 
             self.time += self.tick_time
         except Exception as e:
             print(f"Error getting Position data: {e}")
